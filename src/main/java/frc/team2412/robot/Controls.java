@@ -8,6 +8,7 @@ import static frc.team2412.robot.Subsystems.SubsystemConstants.LAUNCHER_ENABLED;
 import static frc.team2412.robot.Subsystems.SubsystemConstants.LED_ENABLED;
 
 import edu.wpi.first.math.MathUtil;
+import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.GenericHID.RumbleType;
@@ -90,7 +91,7 @@ public class Controls {
 		codriveIntakeReverseButton = codriveController.povLeft();
 		codriveIntakeRejectButton = codriveController.povDown();
 
-		if (Robot.isSysIdMode() && LAUNCHER_ENABLED) {
+		if (Robot.isSysIdMode()) {
 			bindSysIdControls();
 			return;
 		}
@@ -112,11 +113,37 @@ public class Controls {
 		if (LED_ENABLED) {
 			bindLEDControls();
 		}
+		Pose2d SPEAKER_POSE =
+				Robot.isBlue()
+						? new Pose2d(0.0, 5.55, Rotation2d.fromRotations(0))
+						: new Pose2d(16.5, 5.55, Rotation2d.fromRotations(0));
+		if (DRIVEBASE_ENABLED && LAUNCHER_ENABLED) {
+			Commands.run(
+							() -> {
+								Pose2d robotPose = s.drivebaseSubsystem.getPose();
+								Pose2d relativeSpeaker = robotPose.relativeTo(SPEAKER_POSE);
+								double distance = relativeSpeaker.getTranslation().getNorm();
+								s.launcherSubsystem.updateDistanceEntry(distance);
+							})
+					.withName("Update distance")
+					.ignoringDisable(true)
+					.schedule();
+		}
 		if (DRIVEBASE_ENABLED && LAUNCHER_ENABLED && INTAKE_ENABLED) {
 			// temporary controls, not sure what drive team wants
 			driveController
 					.leftBumper()
 					.whileTrue(new FullTargetCommand(s.launcherSubsystem, s.drivebaseSubsystem, this));
+
+			// other left bumper control is for vision launch auto testing
+
+			// driveController
+			// 		.leftBumper()
+			// 		.onTrue(
+			// 				new FullTargetCommand(s.launcherSubsystem, s.drivebaseSubsystem, this)
+			// 						.until(AutoLogic.isReadyToLaunch())
+			// 						.andThen(new WaitCommand(AutoLogic.FEEDER_DELAY))
+			// 						.andThen(new FeederInCommand(s.intakeSubsystem).until(AutoLogic.untilNoNote())));
 			// codriveController
 			// 		.rightBumper()
 			// 		.whileTrue(
@@ -237,18 +264,18 @@ public class Controls {
 	private void bindSysIdControls() {
 		// only one routine can be run in one robot log
 		// switch these between arm and flywheel in code when tuning
-		driveController
-				.leftBumper()
-				.whileTrue(s.launcherSubsystem.flywheelSysIdQuasistatic(Direction.kForward));
-		driveController
-				.rightBumper()
-				.whileTrue(s.launcherSubsystem.flywheelSysIdQuasistatic(Direction.kReverse));
-		driveController
-				.leftTrigger()
-				.whileTrue(s.launcherSubsystem.flywheelSysIdDynamic(Direction.kForward));
-		driveController
-				.rightTrigger()
-				.whileTrue(s.launcherSubsystem.flywheelSysIdDynamic(Direction.kReverse));
+		// driveController
+		// 		.leftBumper()
+		// 		.whileTrue(s.launcherSubsystem.flywheelSysIdQuasistatic(Direction.kForward));
+		// driveController
+		// 		.rightBumper()
+		// 		.whileTrue(s.launcherSubsystem.flywheelSysIdQuasistatic(Direction.kReverse));
+		// driveController
+		// 		.leftTrigger()
+		// 		.whileTrue(s.launcherSubsystem.flywheelSysIdDynamic(Direction.kForward));
+		// driveController
+		// 		.rightTrigger()
+		// 		.whileTrue(s.launcherSubsystem.flywheelSysIdDynamic(Direction.kReverse));
 		// switch these between angle and drive tests in code when tuning
 		driveController.x().whileTrue(s.drivebaseSubsystem.angleSysIdQuasistatic(Direction.kForward));
 		driveController.y().whileTrue(s.drivebaseSubsystem.angleSysIdQuasistatic(Direction.kReverse));

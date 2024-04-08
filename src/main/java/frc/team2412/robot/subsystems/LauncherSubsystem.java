@@ -23,6 +23,7 @@ import edu.wpi.first.wpilibj.shuffleboard.Shuffleboard;
 import edu.wpi.first.wpilibj.sysid.SysIdRoutineLog;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import edu.wpi.first.wpilibj2.command.button.Trigger;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
 import frc.team2412.robot.Hardware;
 import frc.team2412.robot.Robot;
@@ -34,18 +35,19 @@ public class LauncherSubsystem extends SubsystemBase {
 
 	// HARDWARE
 	private static final double PIVOT_GEARING_RATIO = 1.0 / 180.0;
-	private static final float PIVOT_SOFTSTOP_FORWARD = 0.84f;
+	private static final float PIVOT_SOFTSTOP_FORWARD = 0.93f;
 	private static final float PIVOT_SOFTSTOP_BACKWARD = 0.635f;
 	private static final float PIVOT_DISABLE_OFFSET = 0.04f;
+	private static final int PIVOT_OFFSET = 36;
 	// ANGLE VALUES
-	public static final int AMP_AIM_ANGLE = 288;
-	public static final int SUBWOOFER_AIM_ANGLE = 256;
-	public static final int PODIUM_AIM_ANGLE = 238;
-	public static final int TRAP_AIM_ANGLE = 317;
+	public static final int AMP_AIM_ANGLE = 288 + PIVOT_OFFSET;
+	public static final int SUBWOOFER_AIM_ANGLE = 252 + PIVOT_OFFSET;
+	public static final int PODIUM_AIM_ANGLE = 238 + PIVOT_OFFSET;
+	public static final int TRAP_AIM_ANGLE = 317 + PIVOT_OFFSET;
 	public static final double MANUAL_MODIFIER = 0.02;
-	public static final double RETRACTED_ANGLE = 242;
+	public static final double RETRACTED_ANGLE = 242 + PIVOT_OFFSET;
 	// offset for FF so parallel to floor is 0
-	public static final double FF_PIVOT_OFFSET = 225;
+	public static final double FF_PIVOT_OFFSET = 225 + PIVOT_OFFSET;
 
 	// MOTOR VALUES
 	// max Free Speed: 6784 RPM
@@ -88,6 +90,8 @@ public class LauncherSubsystem extends SubsystemBase {
 	private double manualAngleSetpoint;
 
 	private GenericEntry setLauncherSpeedEntry;
+
+	private GenericEntry setLauncherAngleEntry;
 
 	private GenericEntry launcherAngleEntry;
 
@@ -169,7 +173,7 @@ public class LauncherSubsystem extends SubsystemBase {
 		launcherAngleTwoMotor.follow(launcherAngleOneMotor, true);
 
 		// PID
-		launcherAngleOnePIDController.setP(5.421);
+		launcherAngleOnePIDController.setP(5.2);
 		launcherAngleOnePIDController.setI(0);
 		launcherAngleOnePIDController.setD(0.066248);
 		launcherAngleOnePIDController.setOutputRange(-ANGLE_MAX_SPEED, ANGLE_MAX_SPEED);
@@ -207,6 +211,7 @@ public class LauncherSubsystem extends SubsystemBase {
 	// used for presets
 	public void launch(double speed) {
 		rpmSetpoint = speed;
+
 		launcherTopPIDController.setReference(
 				rpmSetpoint, ControlType.kVelocity, 0); // launcherTopFeedforward.calculate(speed));
 		launcherBottomPIDController.setReference(
@@ -226,6 +231,15 @@ public class LauncherSubsystem extends SubsystemBase {
 	public double getAngle() {
 		// get position returns a double in the form of rotations
 		return Units.rotationsToDegrees(launcherAngleEncoder.getPosition());
+	}
+
+	/**
+	 * Sets the launcher angle, taking the offset into account.
+	 *
+	 * @param launcherAngle Launcher angle. PIVOT_OFFSET will be added to this.
+	 */
+	public void setAngleWithOffset(double launcherAngle) {
+		setAngle(launcherAngle + PIVOT_OFFSET);
 	}
 
 	public void setAngle(double launcherAngle) {
@@ -339,9 +353,13 @@ public class LauncherSubsystem extends SubsystemBase {
 						.withPosition(5, 0)
 						.getEntry();
 
+		setLauncherAngleEntry =
+				Shuffleboard.getTab("Launcher").add("Launcher Angle Setpoint", getAngle()).getEntry();
+
 		launcherAngleManual =
 				Shuffleboard.getTab("Launcher")
-						.add("Launcher manual increase", 0)
+						.add("Launcher manual angle (rot.)", 0)
+						.withPosition(0, 1)
 						.withSize(1, 1)
 						.withWidget(BuiltInWidgets.kTextView)
 						.getEntry();
@@ -361,6 +379,21 @@ public class LauncherSubsystem extends SubsystemBase {
 				Shuffleboard.getTab("Launcher").add("Angle Setpoint", 0).withPosition(2, 2).getEntry();
 		launcherFlywheelSetpointEntry =
 				Shuffleboard.getTab("Launcher").add("Flywheel Setpoint", 0).withPosition(4, 5).getEntry();
+
+		var manualModeEntry =
+				Shuffleboard.getTab("Launcher")
+						.add("Full manual mode", false)
+						.withPosition(3, 0)
+						.withSize(1, 1)
+						.withWidget(BuiltInWidgets.kToggleSwitch)
+						.getEntry();
+		new Trigger(() -> manualModeEntry.getBoolean(false))
+				.whileTrue(
+						run(() -> {
+									setAngleWithOffset(setLauncherAngleEntry.getDouble(getAngle()));
+									launch(setLauncherSpeedEntry.getDouble(SPEAKER_SHOOT_SPEED_RPM));
+								})
+								.withName("Full Manual"));
 	}
 
 	public void updateDistanceEntry(double distance) {
